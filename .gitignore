@@ -1,0 +1,18 @@
+# Ignorer les fichiers temporaires
+*.log
+*.tmp
+*.swp
+
+# Ignorer les dossiers spécifiques
+node_modules/
+dist/
+build/
+.env
+
+# Ignorer les fichiers système
+.DS_Store
+Thumbs.db
+
+# Ignorer les fichiers de l'IDE
+.vscode/
+.idea/
