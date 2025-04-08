@@ -16,3 +16,7 @@ Thumbs.db
 # Ignorer les fichiers de l'IDE
 .vscode/
 .idea/
+
+
+# ignorer le fichier mémoire
+agent-memory.json
