@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import dotenv from "dotenv";
-import { saveMessage } from "./managementMemory.mts";
+import { getMemory, saveMessage } from "./managementMemory.mts";
 dotenv.config();
 
 interface questionParams {
@@ -20,22 +20,24 @@ async function askAgent(question: questionParams) {
     createdAt: new Date(),
   });
 
+  const memory = await getMemory();
+
   const response = await client.chat.completions.create({
     model: "gpt-3.5-turbo",
-    messages: [
-      { role: "system", content: "Tu es un assistant de cybersécurité." },
-      { role: "user", content: question.content },
-    ],
+    messages: memory.map((line) => ({
+      role: line.role,
+      content: line.content,
+    })),
   });
 
   // save system answer
   await saveMessage({
     content: response.choices[0].message.content!,
-    role: "system",
+    role: "assistant",
     createdAt: new Date(),
   });
 
-  console.log(response.choices[0].message);
+  console.log(response.choices[0].message.content!);
 }
 
 const question =

@@ -2,7 +2,7 @@ import * as fs from "fs";
 
 interface MemoryCore {
   content: string;
-  role: "user" | "system";
+  role: "user" | "assistant";
   createdAt: Date;
 }
 
@@ -29,4 +29,4 @@ async function getMemory(): Promise<MemoryCore[]> {
   }
 }
 
-export { saveMessage, getMemory };
+export { saveMessage, getMemory, MemoryCore };
