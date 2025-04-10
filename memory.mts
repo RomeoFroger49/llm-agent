@@ -1,5 +1,6 @@
 import fs from "fs";
 
+
 const FILE = "memory/memory.json";
 
 export interface memoryCore {
