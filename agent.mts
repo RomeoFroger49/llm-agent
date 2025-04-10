@@ -7,7 +7,6 @@ const STORE_ID_PATH = "memory/storeId.json";
 export class Agent {
   private userID: number;
   private storeID: string | null = null;
-  private history: memoryCore[];
   public client = new OpenAI({
     apiKey: process.env.OPEN_AI_KEY,
   });
@@ -25,16 +24,15 @@ export class Agent {
   }
 
   async respond(userMessage: string): Promise<string> {
-    
     const context = await this.retrieveRelevantContext(userMessage);
-    
+
     const response = await this.client.chat.completions.create({
       model: "gpt-4",
       messages: [
         {
           role: "system",
           content:
-          "Tu es un assistant intelligent. Utilise les informations contextuelles si elles sont pertinentes pour répondre à l'utilisateur.",
+            "Tu es un assistant intelligent. Utilise les informations contextuelles si elles sont pertinentes pour répondre à l'utilisateur.",
         },
         {
           role: "user",
@@ -42,13 +40,13 @@ export class Agent {
         },
       ],
     });
-    
+
     const assistantMessage = response.choices[0].message.content!;
     // Add the messages
     await this.addMessageToVectorStore(userMessage, "USER");
     await this.addMessageToVectorStore(assistantMessage, "ASSISTANT");
 
-    console.log(assistantMessage);
+    console.log("Assitant: " + assistantMessage);
 
     return assistantMessage;
   }
