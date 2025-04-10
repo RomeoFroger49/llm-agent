@@ -1,13 +1,14 @@
 import dotenv from "dotenv";
-import { StatefulAgent } from "./agent.mts";
-import OpenAI from "openai";
+import { Agent } from "./agent.mts";
 dotenv.config();
 
-function main(): void {
+async function main(): Promise<void> {
   let state = 1;
-  const agent = new StatefulAgent(1);
+  const agent = new Agent(42);
+  // create a store ou retrieve an existant one
+  await agent.initialize();
 
-  agent.respond(process.argv[2]);
+  await agent.respond(process.argv[2]);
 }
 
 main();

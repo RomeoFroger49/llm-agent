@@ -1,11 +1,10 @@
 import OpenAI from "openai";
-import fs from "fs";
-import { loadHistory, saveHistory } from "./memory.mts";
+import fs, { ReadStream, unlinkSync } from "fs";
 import type { memoryCore } from "./memory.mts";
 
 const STORE_ID_PATH = "memory/storeId.json";
 
-export class StatefulAgent {
+export class Agent {
   private userID: number;
   private storeID: string | null = null;
   private history: memoryCore[];
@@ -15,50 +14,46 @@ export class StatefulAgent {
 
   constructor(userID: number) {
     this.userID = userID;
-    this.history = loadHistory(userID);
+  }
+
+  async initialize(): Promise<void> {
+    await this.loadOrCreateStore();
+  }
+
+  private getLocalFilePath(): string {
+    return `memory/user-${this.userID}.txt`;
   }
 
   async respond(userMessage: string): Promise<string> {
-    // Ajout du message utilisateur
-    this.history.push({
-      role: "user",
-      content: userMessage,
-      created_at: new Date(),
-    });
-
+    
     const context = await this.retrieveRelevantContext(userMessage);
-
+    
     const response = await this.client.chat.completions.create({
       model: "gpt-4",
       messages: [
-      {
-        role: "system",
-        content:
+        {
+          role: "system",
+          content:
           "Tu es un assistant intelligent. Utilise les informations contextuelles si elles sont pertinentes pour répondre à l'utilisateur.",
-      },
-      {
-        role: "user",
-        content: `Contexte (mémoire pertinente) :\n${context}\n\nQuestion : ${userMessage}`,
-      },
-    ],
+        },
+        {
+          role: "user",
+          content: `Contexte (mémoire pertinente) :\n${context}\n\nQuestion : ${userMessage}`,
+        },
+      ],
     });
-
+    
     const assistantMessage = response.choices[0].message.content!;
-    this.history.push({
-      role: "assistant",
-      content: assistantMessage,
-      created_at: new Date(),
-    });
-
-    // Sauvegarde
-    saveHistory(this.userID, this.history);
+    // Add the messages
+    await this.addMessageToVectorStore(userMessage, "USER");
+    await this.addMessageToVectorStore(assistantMessage, "ASSISTANT");
 
     console.log(assistantMessage);
 
     return assistantMessage;
   }
 
-  private async loadOrCreateStore(): Promise<string> {
+  async loadOrCreateStore(): Promise<string> {
     const all = fs.existsSync(STORE_ID_PATH)
       ? new Map(
           Object.entries(JSON.parse(fs.readFileSync(STORE_ID_PATH, "utf-8")))
@@ -70,7 +65,10 @@ export class StatefulAgent {
     if (all.has(storeName)) {
       this.storeID = all.get(storeName)!;
     } else {
-      const store = await this.client.vectorStores.create({ name: storeName });
+      const store = await this.client.vectorStores.create({
+        name: storeName,
+        expires_after: { anchor: "last_active_at", days: 1 },
+      });
       this.storeID = store.id;
       all.set(storeName, store.id);
       fs.writeFileSync(
@@ -83,8 +81,6 @@ export class StatefulAgent {
   }
 
   private async retrieveRelevantContext(query: string): Promise<string> {
-    if (!this.storeID) await this.loadOrCreateStore();
-
     const results = await this.client.vectorStores.search(this.storeID!, {
       query,
     });
@@ -92,5 +88,39 @@ export class StatefulAgent {
     return results.data
       .map((r) => r.content.map((p) => p.text).join("\n"))
       .join("\n---\n");
+  }
+
+  async clearVectorStoreFiles(): Promise<void> {
+    const fileList = await this.client.vectorStores.files.list(this.storeID!);
+
+    for (const file of fileList.data) {
+      await this.client.files.del(file.id);
+      await this.client.vectorStores.files.del(this.storeID!, file.id);
+    }
+  }
+
+  private async addMessageToVectorStore(
+    message: string,
+    role: "USER" | "ASSISTANT"
+  ): Promise<void> {
+    const filePath = this.getLocalFilePath();
+
+    // Append message localy
+    const formattedMessage = `[${new Date().toISOString()}] ${role}: ${message}\n`;
+    fs.appendFileSync(filePath, formattedMessage, "utf-8");
+
+    // delete the old file on OpenAI
+    await this.clearVectorStoreFiles();
+
+    // Uploader la nouvelle version
+    const uploadedFile = await this.client.files.create({
+      file: fs.createReadStream(filePath),
+      purpose: "assistants",
+    });
+
+    // add the new file to the vectorStore
+    await this.client.vectorStores.files.create(this.storeID!, {
+      file_id: uploadedFile.id,
+    });
   }
 }
