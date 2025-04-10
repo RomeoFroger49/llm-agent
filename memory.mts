@@ -8,6 +8,7 @@ export interface memoryCore {
   created_at: Date;
 }
 
+// JSON memory file
 export const loadHistory = (userID: number): memoryCore[] => {
   if (!fs.existsSync(FILE)) return [];
   const all = JSON.parse(fs.readFileSync(FILE, "utf-8") || "{}");
@@ -21,4 +22,3 @@ export const saveHistory = (userID: number, messages: memoryCore[]): void => {
   all[userID] = messages;
   fs.writeFileSync(FILE, JSON.stringify(all, null, 2));
 };
-
