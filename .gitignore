@@ -19,4 +19,4 @@ Thumbs.db
 
 
 # ignorer le fichier mémoire
-agent-memory.json
+memory/
