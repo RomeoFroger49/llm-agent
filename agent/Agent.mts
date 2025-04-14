@@ -1,10 +1,9 @@
 import OpenAI from "openai";
-import { DynamoMemoryManager } from "./DynamoMemoryManager.mts";
-import type { Message } from "../types.d.ts";
+import { MemoryManager } from "./MemoryManager.mts";
 
 export class Agent {
   private userID: number;
-  private memoryManager!: DynamoMemoryManager;
+  private memoryManager!: MemoryManager;
   public client = new OpenAI({ apiKey: process.env.OPEN_AI_KEY });
 
   constructor(userID: number) {
@@ -12,7 +11,7 @@ export class Agent {
   }
 
   async initialize(): Promise<void> {
-    this.memoryManager = await DynamoMemoryManager.create(
+    this.memoryManager = await MemoryManager.create(
       this.userID,
       this.client
     );
@@ -26,8 +25,6 @@ export class Agent {
       content: m.content,
     }));
 
-    console.log("Memory messages:", messages);
-
     messages.push({ role: "user", content: question });
 
     const response = await this.client.chat.completions.create({
@@ -36,6 +33,8 @@ export class Agent {
     });
 
     const answer = response.choices[0].message.content ?? "";
+
+    console.log("Assistant's answer:", answer);
 
     // On enregistre la question + la réponse
     await this.memoryManager.saveMessage({
