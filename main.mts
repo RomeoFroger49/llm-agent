@@ -26,7 +26,7 @@ async function main(): Promise<void> {
     }
 
     if (trimmed.length > 0) {
-      await agent.respond(trimmed);
+      await agent.interact(trimmed);
     }
   });
 }

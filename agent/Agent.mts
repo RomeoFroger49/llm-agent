@@ -12,45 +12,45 @@ export class Agent {
   }
 
   async initialize(): Promise<void> {
-    this.memoryManager = await DynamoMemoryManager.create(this.userID);
+    this.memoryManager = await DynamoMemoryManager.create(
+      this.userID,
+      this.client
+    );
   }
 
-  async respond(userMessage: string): Promise<string> {
-    const context = await this.memoryManager.getUserMemory();
+  async interact(question: string): Promise<string> {
+    const memory = await this.memoryManager.getRelevantMessages(question, 3);
+
+    const messages = memory.map((m) => ({
+      role: m.role.toLowerCase() as "user" | "assistant",
+      content: m.content,
+    }));
+
+    console.log("Memory messages:", messages);
+
+    messages.push({ role: "user", content: question });
 
     const response = await this.client.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a helpful assistant. Use the provided context when relevant.",
-        },
-        {
-          role: "user",
-          content: `Context:\n${context.map((p) => {
-            return `\n[${p.timestamp}] ${p.role}: ${p.content}`;
-          })}\n\nQuestion: ${userMessage}`,
-        },
-      ],
+      model: "gpt-3.5-turbo",
+      messages,
     });
 
-    const assistantMessage = response.choices[0].message.content!;
+    const answer = response.choices[0].message.content ?? "";
 
-    this.memoryManager.saveMessage({
+    // On enregistre la question + la réponse
+    await this.memoryManager.saveMessage({
+      timestamp: new Date().toISOString(),
       role: "USER",
-      content: userMessage,
-      timestamp: new Date().toISOString(),
+      content: question,
     });
 
-    this.memoryManager.saveMessage({
+    await this.memoryManager.saveMessage({
+      timestamp: new Date().toISOString(),
       role: "ASSISTANT",
-      content: assistantMessage,
-      timestamp: new Date().toISOString(),
+      content: answer,
     });
 
-    console.log(assistantMessage);
-    return assistantMessage;
+    return answer;
   }
 
   // async changeUser(newUserID: number): Promise<void> {

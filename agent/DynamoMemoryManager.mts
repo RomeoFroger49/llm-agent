@@ -11,6 +11,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import type { Message, Role } from "../types.d.ts";
 import dotenv from "dotenv";
+import OpenAI from "openai";
 
 dotenv.config();
 
@@ -28,16 +29,20 @@ export class DynamoMemoryManager {
   });
 
   private ddb = DynamoDBDocumentClient.from(this.baseClient);
-  private userID: number;
+  private client: OpenAI;
   public tableName: string;
   private isInitialized: boolean = false;
 
-  private constructor(userID: number) {
+  private constructor(userID: number, client: OpenAI) {
+    this.client = client;
     this.tableName = `AgentMemory_user-${userID}`;
   }
 
-  static async create(userID: number): Promise<DynamoMemoryManager> {
-    const instance = new DynamoMemoryManager(userID);
+  static async create(
+    userID: number,
+    client: OpenAI
+  ): Promise<DynamoMemoryManager> {
+    const instance = new DynamoMemoryManager(userID, client);
     await instance.init();
     return instance;
   }
@@ -66,10 +71,17 @@ export class DynamoMemoryManager {
   }
 
   async saveMessage(message: Message): Promise<void> {
+    const embeddingResponse = await this.client.embeddings.create({
+      model: "text-embedding-ada-002",
+      input: message.content,
+    });
     await this.ddb.send(
       new PutCommand({
         TableName: this.tableName,
-        Item: message,
+        Item: {
+          ...message,
+          embedding: embeddingResponse.data[0].embedding,
+        },
       })
     );
   }
@@ -86,5 +98,44 @@ export class DynamoMemoryManager {
       (a, b) =>
         new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
+  }
+
+  async getRelevantMessages(
+    query: string,
+    topK: number = 3
+  ): Promise<Message[]> {
+    const embeddingResponse = await this.client.embeddings.create({
+      model: "text-embedding-ada-002",
+      input: query,
+    });
+
+    const queryEmbedding = embeddingResponse.data[0].embedding;
+
+    const result = await this.ddb.send(
+      new ScanCommand({ TableName: this.tableName })
+    );
+
+    const scored = ((result.Items || []) as any[]).map((item) => ({
+      item,
+      score: this.cosineSimilarity(queryEmbedding, item.embedding),
+    }));
+
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, topK)
+      .map(({ item }) => ({
+        timestamp: item.timestamp,
+        role: item.role,
+        content: item.content,
+      }));
+  }
+
+  // tool
+
+  cosineSimilarity(a: number[], b: number[]): number {
+    const dot = a.reduce((sum, val, i) => sum + val * b[i], 0);
+    const normA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+    const normB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+    return dot / (normA * normB);
   }
 }
