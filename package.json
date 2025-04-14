@@ -5,6 +5,8 @@
   "description": "",
   "main": "agent.js",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.788.0",
+    "@aws-sdk/lib-dynamodb": "^3.789.0",
     "abort-controller": "^3.0.0",
     "agentkeepalive": "^4.6.0",
     "asynckit": "^0.4.0",
